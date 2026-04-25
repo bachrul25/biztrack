@@ -1,16 +1,19 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\ReportPdfController;
+use App\Livewire\CategoryComponent;
 use App\Livewire\DashboardComponent;
 use App\Livewire\FinanceComponent;
+use App\Livewire\FinanceReportComponent;
 use App\Livewire\ProductComponent;
-use App\Livewire\Reports\FinanceReportComponent;
-use App\Livewire\Reports\ProfitLossReportComponent;
-use App\Livewire\Reports\SalesReportComponent;
-use App\Livewire\Reports\StockReportComponent;
+use App\Livewire\ProfitLossReportComponent;
 use App\Livewire\SaleComponent;
+use App\Livewire\SalesPredictionComponent;
+use App\Livewire\SalesReportComponent;
 use App\Livewire\StockComponent;
+use App\Livewire\StockReportComponent;
+use App\Models\Sale;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -27,22 +30,29 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/dashboard', DashboardComponent::class)->name('dashboard');
 
+    // Admin-only operational pages
     Route::middleware('role:admin')->group(function () {
         Route::get('/products', ProductComponent::class)->name('products');
-        Route::get('/sales', SaleComponent::class)->name('sales');
+        Route::get('/categories', CategoryComponent::class)->name('categories');
         Route::get('/stocks', StockComponent::class)->name('stocks');
+        Route::get('/sales', SaleComponent::class)->name('sales');
         Route::get('/finances', FinanceComponent::class)->name('finances');
     });
 
+    // Reports + predictions: admin + owner
     Route::middleware('role:admin,owner')->group(function () {
         Route::get('/reports/sales', SalesReportComponent::class)->name('reports.sales');
+        Route::get('/reports/stocks', StockReportComponent::class)->name('reports.stocks');
         Route::get('/reports/finance', FinanceReportComponent::class)->name('reports.finance');
         Route::get('/reports/profit-loss', ProfitLossReportComponent::class)->name('reports.profit-loss');
-        Route::get('/reports/stocks', StockReportComponent::class)->name('reports.stocks');
+        Route::get('/predictions/sales', SalesPredictionComponent::class)->name('predictions.sales');
 
-        Route::get('/reports/sales/pdf', [ReportPdfController::class, 'sales'])->name('reports.sales.pdf');
-        Route::get('/reports/finance/pdf', [ReportPdfController::class, 'finance'])->name('reports.finance.pdf');
-        Route::get('/reports/profit-loss/pdf', [ReportPdfController::class, 'profitLoss'])->name('reports.profit-loss.pdf');
-        Route::get('/reports/stocks/pdf', [ReportPdfController::class, 'stock'])->name('reports.stocks.pdf');
+        // Invoice PDF (simple sale detail print)
+        Route::get('/sales/{sale}/invoice', function (Sale $sale) {
+            $pdf = Pdf::loadView('pdf.invoice', ['sale' => $sale->load(['user', 'items.product'])])
+                ->setPaper('a5', 'portrait');
+
+            return $pdf->stream('invoice-'.$sale->invoice_number.'.pdf');
+        })->name('sales.invoice');
     });
 });

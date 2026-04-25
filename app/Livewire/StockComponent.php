@@ -3,83 +3,105 @@
 namespace App\Livewire;
 
 use App\Models\Product;
-use App\Repositories\ProductRepository;
-use Illuminate\Contracts\View\View;
+use App\Repositories\StockRepository;
+use App\Services\PredictionService;
+use App\Services\StockService;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Title;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('layouts.app')]
-#[Title('Stok')]
 class StockComponent extends Component
 {
     use WithPagination;
 
-    #[Url(as: 'q')]
-    public string $search = '';
+    public ?int $filterProductId = null;
 
-    #[Url(as: 'status')]
-    public string $filter = '';
+    public ?string $filterType = null;
+
+    public ?string $dateFrom = null;
+
+    public ?string $dateTo = null;
 
     public bool $showModal = false;
-    public ?int $productId = null;
-    public string $productName = '';
-    public string $stock = '';
+
+    public string $movementType = 'in';
+
+    public ?int $product_id = null;
+
+    public int $quantity = 0;
+
+    public ?string $description = null;
+
+    public ?string $movement_date = null;
+
+    public function mount(): void
+    {
+        $this->movement_date = now()->toDateString();
+    }
 
     protected function rules(): array
     {
         return [
-            'stock' => ['required', 'integer', 'min:0'],
+            'movementType' => ['required', 'in:in,out'],
+            'product_id' => ['required', 'exists:products,id'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'movement_date' => ['required', 'date'],
+            'description' => ['nullable', 'string', 'max:255'],
         ];
     }
 
-    protected array $messages = [
-        'stock.required' => 'Stok wajib diisi.',
-        'stock.integer' => 'Stok harus angka.',
-        'stock.min' => 'Stok tidak boleh minus.',
-    ];
-
-    public function updatingSearch(): void
+    public function openCreate(string $type = 'in'): void
     {
-        $this->resetPage();
-    }
-
-    public function updatingFilter(): void
-    {
-        $this->resetPage();
-    }
-
-    public function edit(int $id): void
-    {
-        $product = Product::findOrFail($id);
-        $this->productId = $product->id;
-        $this->productName = $product->name;
-        $this->stock = (string) $product->stock;
+        $this->reset(['product_id', 'quantity', 'description']);
+        $this->movementType = $type;
+        $this->movement_date = now()->toDateString();
         $this->showModal = true;
     }
 
-    public function update(ProductRepository $products): void
+    public function save(): void
     {
-        $this->validate();
-        $product = Product::findOrFail($this->productId);
-        $products->adjustStock($product, (int) $this->stock);
-        $this->dispatch('swal', icon: 'success', title: 'Stok diperbarui');
-        $this->showModal = false;
-        $this->reset(['productId', 'productName', 'stock']);
+        $data = $this->validate();
+        /** @var StockService $svc */
+        $svc = app(StockService::class);
+        try {
+            $product = Product::findOrFail($data['product_id']);
+            if ($data['movementType'] === 'in') {
+                $svc->recordIn($product, (int) $data['quantity'], $data['description'] ?? null, $data['movement_date']);
+            } else {
+                $svc->recordOut($product, (int) $data['quantity'], $data['description'] ?? null, $data['movement_date']);
+            }
+            $this->dispatch('swal', icon: 'success', title: 'Pergerakan stok dicatat');
+            $this->showModal = false;
+        } catch (\DomainException $e) {
+            $this->dispatch('swal', icon: 'error', title: 'Gagal menyimpan', text: $e->getMessage());
+        }
     }
 
-    public function closeModal(): void
+    public function render()
     {
-        $this->showModal = false;
-        $this->reset(['productId', 'productName', 'stock']);
-    }
+        $repo = app(StockRepository::class);
+        $products = Product::orderBy('name')->get();
+        $movements = $repo->movements($this->filterProductId, $this->filterType, $this->dateFrom, $this->dateTo, 15);
+        $lowStock = Product::whereColumn('stock', '<=', 'minimum_stock')->orderBy('stock')->get();
 
-    public function render(ProductRepository $products): View
-    {
+        // Restock recommendations using the last 6 monthly periods
+        $predictionSvc = app(PredictionService::class);
+        $recs = [];
+        foreach ($lowStock as $p) {
+            $hist = $predictionSvc->historicalSeries('monthly', $p->id);
+            if (count($hist) < 2) {
+                continue;
+            }
+            $forecast = $predictionSvc->forecast('linear_trend', $hist, 1, [], 'monthly');
+            $recs[$p->id] = $predictionSvc->stockRecommendation((float) ($forecast['forecast'][0] ?? 0), 0.15);
+        }
+
         return view('livewire.stock-component', [
-            'products' => $products->stockPaginate($this->search, $this->filter ?: null, 10),
+            'movements' => $movements,
+            'products' => $products,
+            'lowStock' => $lowStock,
+            'stockRecommendations' => $recs,
         ]);
     }
 }

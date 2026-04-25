@@ -11,11 +11,16 @@ return new class extends Migration
         Schema::create('finances', function (Blueprint $table) {
             $table->id();
             $table->enum('type', ['income', 'expense']);
-            $table->decimal('amount', 14, 2);
+            $table->string('category')->nullable();
             $table->string('description');
-            $table->string('source');
-            $table->date('date');
+            $table->decimal('amount', 14, 2);
+            $table->date('transaction_date');
+            $table->string('source')->nullable();
+            $table->unsignedBigInteger('reference_id')->nullable();
             $table->timestamps();
+
+            $table->index('transaction_date');
+            $table->index(['type', 'transaction_date']);
         });
     }
 

@@ -11,15 +11,29 @@ class Finance extends Model
 
     protected $fillable = [
         'type',
-        'amount',
+        'category',
         'description',
+        'amount',
+        'transaction_date',
         'source',
-        'date',
+        'reference_id',
     ];
 
     protected $casts = [
-        'date' => 'date',
+        'transaction_date' => 'date',
         'amount' => 'decimal:2',
+    ];
+
+    public const EXPENSE_CATEGORIES = [
+        'Bahan Baku',
+        'Listrik',
+        'Air',
+        'Gaji',
+        'Transportasi',
+        'Sewa',
+        'Promosi',
+        'Peralatan',
+        'Lain-lain',
     ];
 
     public function scopeIncome($query)

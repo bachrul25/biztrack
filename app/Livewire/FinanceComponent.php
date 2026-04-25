@@ -4,160 +4,131 @@ namespace App\Livewire;
 
 use App\Models\Finance;
 use App\Repositories\FinanceRepository;
-use Illuminate\Contracts\View\View;
+use App\Services\FinanceService;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('layouts.app')]
-#[Title('Keuangan')]
 class FinanceComponent extends Component
 {
     use WithPagination;
 
+    #[Url(as: 'type')]
+    public ?string $filterType = null;
+
+    #[Url(as: 'from')]
+    public ?string $dateFrom = null;
+
+    #[Url(as: 'to')]
+    public ?string $dateTo = null;
+
     #[Url(as: 'q')]
     public string $search = '';
 
-    #[Url(as: 'type')]
-    public string $typeFilter = '';
-
-    #[Url(as: 'dari')]
-    public string $dateFrom = '';
-
-    #[Url(as: 'sampai')]
-    public string $dateTo = '';
-
     public bool $showModal = false;
-    public bool $editMode = false;
-    public ?int $financeId = null;
+
+    public ?int $editingId = null;
 
     public string $type = 'expense';
-    public string $amount = '';
-    public string $description = '';
-    public string $source = '';
-    public string $date = '';
 
-    public array $sources = [
-        'Bahan Baku',
-        'Operasional',
-        'Listrik',
-        'Transportasi',
-        'Kemasan',
-        'Gaji',
-        'Lain-lain',
-    ];
+    public ?string $category = null;
+
+    public string $description = '';
+
+    public float $amount = 0;
+
+    public ?string $transaction_date = null;
 
     public function mount(): void
     {
-        $this->date = now()->toDateString();
+        $this->transaction_date = now()->toDateString();
     }
 
     protected function rules(): array
     {
         return [
             'type' => ['required', 'in:income,expense'],
-            'amount' => ['required', 'numeric', 'min:0'],
+            'category' => ['nullable', 'string', 'max:100'],
             'description' => ['required', 'string', 'max:255'],
-            'source' => ['required', 'string', 'max:100'],
-            'date' => ['required', 'date'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'transaction_date' => ['required', 'date'],
         ];
     }
-
-    protected array $messages = [
-        'type.required' => 'Jenis transaksi wajib dipilih.',
-        'amount.required' => 'Jumlah wajib diisi.',
-        'amount.numeric' => 'Jumlah harus angka.',
-        'description.required' => 'Deskripsi wajib diisi.',
-        'source.required' => 'Sumber wajib diisi.',
-        'date.required' => 'Tanggal wajib diisi.',
-    ];
 
     public function updatingSearch(): void
     {
         $this->resetPage();
     }
 
-    public function updatingTypeFilter(): void
+    public function updatingFilterType(): void
     {
         $this->resetPage();
     }
 
-    public function updatingDateFrom(): void
+    public function openCreate(string $type = 'expense'): void
     {
-        $this->resetPage();
-    }
-
-    public function updatingDateTo(): void
-    {
-        $this->resetPage();
-    }
-
-    public function openCreate(): void
-    {
-        $this->resetForm();
-        $this->editMode = false;
+        $this->reset(['editingId', 'category', 'description', 'amount']);
+        $this->type = $type;
+        $this->category = $type === 'expense' ? 'Bahan Baku' : 'Pemasukan Lain';
+        $this->transaction_date = now()->toDateString();
         $this->showModal = true;
     }
 
-    public function edit(int $id): void
+    public function openEdit(int $id): void
     {
-        $finance = Finance::findOrFail($id);
-        $this->financeId = $finance->id;
-        $this->type = $finance->type;
-        $this->amount = (string) $finance->amount;
-        $this->description = $finance->description;
-        $this->source = $finance->source;
-        $this->date = $finance->date?->toDateString() ?? now()->toDateString();
-        $this->editMode = true;
+        $f = Finance::findOrFail($id);
+        $this->editingId = $f->id;
+        $this->type = $f->type;
+        $this->category = $f->category;
+        $this->description = $f->description;
+        $this->amount = (float) $f->amount;
+        $this->transaction_date = $f->transaction_date?->toDateString();
         $this->showModal = true;
     }
 
-    public function store(FinanceRepository $repo): void
+    public function save(): void
     {
         $data = $this->validate();
-        if ($this->editMode && $this->financeId) {
-            $repo->update(Finance::findOrFail($this->financeId), $data);
+        /** @var FinanceService $svc */
+        $svc = app(FinanceService::class);
+
+        if ($this->editingId) {
+            $finance = Finance::findOrFail($this->editingId);
+            if ($finance->source === 'sale') {
+                $this->dispatch('swal', icon: 'error', title: 'Tidak bisa diubah', text: 'Data pemasukan yang berasal dari penjualan hanya bisa dihapus dengan membatalkan transaksi.');
+
+                return;
+            }
+            $svc->update($finance, $data);
             $this->dispatch('swal', icon: 'success', title: 'Data keuangan diperbarui');
         } else {
-            $repo->create($data);
+            $svc->create($data);
             $this->dispatch('swal', icon: 'success', title: 'Data keuangan ditambahkan');
         }
         $this->showModal = false;
-        $this->resetForm();
     }
 
-    public function delete(int $id, FinanceRepository $repo): void
+    public function delete(int $id): void
     {
-        $repo->delete(Finance::findOrFail($id));
-        $this->dispatch('swal', icon: 'success', title: 'Data keuangan dihapus');
+        try {
+            app(FinanceService::class)->delete(Finance::findOrFail($id));
+            $this->dispatch('swal', icon: 'success', title: 'Data keuangan dihapus');
+        } catch (\DomainException $e) {
+            $this->dispatch('swal', icon: 'error', title: 'Gagal menghapus', text: $e->getMessage());
+        }
     }
 
-    public function resetForm(): void
+    public function render()
     {
-        $this->reset(['financeId', 'type', 'amount', 'description', 'source', 'editMode']);
-        $this->type = 'expense';
-        $this->date = now()->toDateString();
-        $this->resetErrorBag();
-    }
-
-    public function closeModal(): void
-    {
-        $this->showModal = false;
-        $this->resetForm();
-    }
-
-    public function render(FinanceRepository $repo): View
-    {
-        $from = $this->dateFrom ?: null;
-        $to = $this->dateTo ?: null;
+        $repo = app(FinanceRepository::class);
 
         return view('livewire.finance-component', [
-            'finances' => $repo->paginate($this->search, $this->typeFilter ?: null, $from, $to, 10),
-            'totalIncome' => $repo->totalIncome($from, $to),
-            'totalExpense' => $repo->totalExpense($from, $to),
-            'netProfit' => $repo->netProfit($from, $to),
+            'finances' => $repo->paginate($this->filterType, $this->dateFrom, $this->dateTo, $this->search ?: null, 10),
+            'totalIncome' => $repo->totalIncome($this->dateFrom, $this->dateTo),
+            'totalExpense' => $repo->totalExpense($this->dateFrom, $this->dateTo),
+            'expenseCategories' => Finance::EXPENSE_CATEGORIES,
         ]);
     }
 }

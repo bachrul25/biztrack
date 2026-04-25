@@ -2,144 +2,159 @@
 
 namespace App\Livewire;
 
+use App\Models\Category;
 use App\Models\Product;
 use App\Repositories\ProductRepository;
-use Illuminate\Contracts\View\View;
+use App\Services\ProductService;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
-use Livewire\WithFileUploads;
+use Livewire\Features\SupportFileUploads\WithFileUploads;
 use Livewire\WithPagination;
 
 #[Layout('layouts.app')]
-#[Title('Produk')]
 class ProductComponent extends Component
 {
-    use WithPagination, WithFileUploads;
+    use WithFileUploads;
+    use WithPagination;
 
     #[Url(as: 'q')]
     public string $search = '';
 
-    #[Url(as: 'kategori')]
-    public string $category = '';
-
-    public ?int $productId = null;
-    public string $name = '';
-    public string $price = '';
-    public string $stock = '';
-    public string $categoryForm = '';
-    public string $status = 'active';
-    public $image = null;
-    public ?string $existingImage = null;
+    #[Url(as: 'cat')]
+    public ?int $filterCategory = null;
 
     public bool $showModal = false;
-    public bool $editMode = false;
+
+    public bool $showDetail = false;
+
+    public ?int $editingId = null;
+
+    public ?int $detailId = null;
+
+    // form fields
+    public ?int $category_id = null;
+
+    public string $name = '';
+
+    public string $code = '';
+
+    public ?string $description = null;
+
+    public $imageUpload = null;
+
+    public ?string $existingImage = null;
+
+    public float $cost_price = 0;
+
+    public float $selling_price = 0;
+
+    public int $stock = 0;
+
+    public int $minimum_stock = 5;
+
+    public string $unit = 'pcs';
+
+    public string $status = 'active';
 
     protected function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:150'],
-            'price' => ['required', 'numeric', 'min:0'],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'name' => ['required', 'string', 'min:2', 'max:150'],
+            'code' => ['nullable', 'string', 'max:50', 'unique:products,code,'.($this->editingId ?? 'NULL').',id'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'imageUpload' => ['nullable', 'image', 'max:2048'],
+            'cost_price' => ['required', 'numeric', 'min:0'],
+            'selling_price' => ['required', 'numeric', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
-            'categoryForm' => ['required', 'string', 'max:100'],
+            'minimum_stock' => ['required', 'integer', 'min:0'],
+            'unit' => ['required', 'string', 'max:20'],
             'status' => ['required', 'in:active,inactive'],
-            'image' => ['nullable', 'image', 'max:2048'],
         ];
     }
-
-    protected array $messages = [
-        'name.required' => 'Nama produk wajib diisi.',
-        'price.required' => 'Harga wajib diisi.',
-        'price.numeric' => 'Harga harus berupa angka.',
-        'stock.required' => 'Stok wajib diisi.',
-        'categoryForm.required' => 'Kategori wajib diisi.',
-        'status.required' => 'Status wajib dipilih.',
-        'image.image' => 'File harus berupa gambar.',
-        'image.max' => 'Ukuran gambar maksimal 2MB.',
-    ];
 
     public function updatingSearch(): void
     {
         $this->resetPage();
     }
 
-    public function updatingCategory(): void
+    public function updatingFilterCategory(): void
     {
         $this->resetPage();
     }
 
     public function openCreate(): void
     {
-        $this->resetForm();
-        $this->editMode = false;
+        $this->reset(['editingId', 'category_id', 'name', 'code', 'description', 'imageUpload', 'existingImage', 'cost_price', 'selling_price', 'stock', 'minimum_stock']);
+        $this->unit = 'pcs';
+        $this->status = 'active';
+        $this->code = Product::generateCode();
         $this->showModal = true;
     }
 
-    public function edit(int $id): void
+    public function openEdit(int $id): void
     {
-        $product = Product::findOrFail($id);
-        $this->productId = $product->id;
-        $this->name = $product->name;
-        $this->price = (string) $product->price;
-        $this->stock = (string) $product->stock;
-        $this->categoryForm = $product->category;
-        $this->status = $product->status;
-        $this->existingImage = $product->image;
-        $this->image = null;
-        $this->editMode = true;
+        $p = Product::findOrFail($id);
+        $this->editingId = $p->id;
+        $this->category_id = $p->category_id;
+        $this->name = $p->name;
+        $this->code = $p->code;
+        $this->description = $p->description;
+        $this->cost_price = (float) $p->cost_price;
+        $this->selling_price = (float) $p->selling_price;
+        $this->stock = (int) $p->stock;
+        $this->minimum_stock = (int) $p->minimum_stock;
+        $this->unit = $p->unit;
+        $this->status = $p->status;
+        $this->existingImage = $p->image;
+        $this->imageUpload = null;
         $this->showModal = true;
     }
 
-    public function store(ProductRepository $products): void
+    public function openDetail(int $id): void
+    {
+        $this->detailId = $id;
+        $this->showDetail = true;
+    }
+
+    public function save(): void
     {
         $data = $this->validate();
-        $payload = [
-            'name' => $data['name'],
-            'price' => $data['price'],
-            'stock' => $data['stock'],
-            'category' => $data['categoryForm'],
-            'status' => $data['status'],
-        ];
+        /** @var ProductService $svc */
+        $svc = app(ProductService::class);
+        $image = $this->imageUpload ?: null;
+        unset($data['imageUpload']);
 
-        if ($this->editMode && $this->productId) {
-            $product = Product::findOrFail($this->productId);
-            $products->update($product, $payload, $this->image ?: null);
+        if ($this->editingId) {
+            $svc->update(Product::findOrFail($this->editingId), $data, $image);
             $this->dispatch('swal', icon: 'success', title: 'Produk diperbarui');
         } else {
-            $products->create($payload, $this->image ?: null);
+            $svc->create($data, $image);
             $this->dispatch('swal', icon: 'success', title: 'Produk ditambahkan');
         }
-
         $this->showModal = false;
-        $this->resetForm();
     }
 
-    public function delete(int $id, ProductRepository $products): void
+    public function delete(int $id): void
     {
-        $product = Product::findOrFail($id);
-        $products->delete($product);
-        $this->dispatch('swal', icon: 'success', title: 'Produk dihapus');
+        try {
+            app(ProductService::class)->delete(Product::findOrFail($id));
+            $this->dispatch('swal', icon: 'success', title: 'Produk dihapus');
+        } catch (\Throwable $e) {
+            $this->dispatch('swal', icon: 'error', title: 'Gagal menghapus', text: $e->getMessage());
+        }
     }
 
-    public function resetForm(): void
+    public function render()
     {
-        $this->reset(['productId', 'name', 'price', 'stock', 'categoryForm', 'status', 'image', 'existingImage', 'editMode']);
-        $this->status = 'active';
-        $this->resetErrorBag();
-    }
+        $products = app(ProductRepository::class)->paginate($this->search ?: null, $this->filterCategory, 10);
+        $detail = $this->detailId ? Product::with('category')->find($this->detailId) : null;
 
-    public function closeModal(): void
-    {
-        $this->showModal = false;
-        $this->resetForm();
-    }
-
-    public function render(ProductRepository $products): View
-    {
         return view('livewire.product-component', [
-            'products' => $products->paginate($this->search, $this->category, 10),
-            'categories' => $products->categories(),
+            'products' => $products,
+            'categories' => Category::orderBy('name')->get(),
+            'detail' => $detail,
         ]);
     }
 }

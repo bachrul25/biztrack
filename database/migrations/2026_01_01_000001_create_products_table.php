@@ -10,11 +10,16 @@ return new class extends Migration
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('category_id')->nullable()->constrained('categories')->nullOnDelete();
             $table->string('name');
-            $table->decimal('price', 12, 2)->default(0);
-            $table->integer('stock')->default(0);
-            $table->string('category');
+            $table->string('code')->unique();
+            $table->text('description')->nullable();
             $table->string('image')->nullable();
+            $table->decimal('cost_price', 14, 2)->default(0);
+            $table->decimal('selling_price', 14, 2)->default(0);
+            $table->integer('stock')->default(0);
+            $table->integer('minimum_stock')->default(5);
+            $table->string('unit')->default('pcs');
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamps();
         });

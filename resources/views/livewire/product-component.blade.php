@@ -1,13 +1,11 @@
-@php
-    $fmtIdr = fn ($v) => 'Rp ' . number_format((float) $v, 0, ',', '.');
-@endphp
+@php use App\Helpers\FormatHelper as F; @endphp
 <div>
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div class="page-header d-flex justify-content-between align-items-end flex-wrap mb-4">
         <div>
-            <h3 class="mb-1 fw-bold">Manajemen Produk</h3>
-            <p class="text-muted mb-0">Kelola produk kue yang dijual di Toko Kue Bu Nina.</p>
+            <h1 class="h3 fw-bold mb-1">Produk</h1>
+            <p class="text-muted mb-0">Kelola katalog produk kue</p>
         </div>
-        <button wire:click="openCreate" class="btn btn-primary">
+        <button class="btn btn-primary" wire:click="openCreate">
             <i class="bi bi-plus-lg"></i> Tambah Produk
         </button>
     </div>
@@ -15,18 +13,14 @@
     <div class="card content-card">
         <div class="card-body">
             <div class="row g-2 mb-3">
-                <div class="col-md-6 col-lg-5">
-                    <div class="input-group">
-                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                        <input wire:model.live.debounce.400ms="search" type="text"
-                               class="form-control" placeholder="Cari nama produk atau kategori...">
-                    </div>
+                <div class="col-md-5">
+                    <input type="text" wire:model.live.debounce.400ms="search" class="form-control" placeholder="Cari nama / kode produk…">
                 </div>
-                <div class="col-md-4 col-lg-3">
-                    <select wire:model.live="category" class="form-select">
+                <div class="col-md-4">
+                    <select wire:model.live="filterCategory" class="form-select">
                         <option value="">Semua kategori</option>
-                        @foreach ($categories as $cat)
-                            <option value="{{ $cat }}">{{ $cat }}</option>
+                        @foreach($categories as $c)
+                            <option value="{{ $c->id }}">{{ $c->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -36,135 +30,177 @@
                 <table class="table align-middle">
                     <thead>
                         <tr>
-                            <th style="width: 64px">#</th>
                             <th>Foto</th>
+                            <th>Kode</th>
                             <th>Nama</th>
                             <th>Kategori</th>
-                            <th class="text-end">Harga</th>
+                            <th class="text-end">Harga Modal</th>
+                            <th class="text-end">Harga Jual</th>
                             <th class="text-end">Stok</th>
                             <th>Status</th>
                             <th class="text-end">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                    @forelse ($products as $p)
-                        <tr wire:key="prod-{{ $p->id }}">
-                            <td>{{ $loop->iteration + ($products->firstItem() ? $products->firstItem() - 1 : 0) }}</td>
+                    @forelse($products as $p)
+                        <tr>
                             <td>
                                 @if($p->image)
-                                    <img src="{{ asset('storage/' . $p->image) }}" alt="" width="48" height="48" class="rounded object-fit-cover border">
+                                    <img src="{{ asset('storage/'.$p->image) }}" class="rounded" style="width:42px;height:42px;object-fit:cover">
                                 @else
-                                    <span class="d-inline-block bg-light rounded" style="width:48px;height:48px;line-height:48px;text-align:center">
+                                    <div class="rounded bg-light d-grid place-items-center" style="width:42px;height:42px">
                                         <i class="bi bi-image text-muted"></i>
-                                    </span>
+                                    </div>
                                 @endif
                             </td>
+                            <td class="text-muted small">{{ $p->code }}</td>
                             <td class="fw-semibold">{{ $p->name }}</td>
-                            <td><span class="badge text-bg-light">{{ $p->category }}</span></td>
-                            <td class="text-end">{{ $fmtIdr($p->price) }}</td>
+                            <td>{{ $p->category?->name ?? '—' }}</td>
+                            <td class="text-end">{{ F::rupiah($p->cost_price) }}</td>
+                            <td class="text-end">{{ F::rupiah($p->selling_price) }}</td>
                             <td class="text-end">
-                                <span class="badge text-bg-{{ $p->stock_badge }}">{{ $p->stock }}</span>
+                                <span class="badge text-bg-{{ $p->stock_badge }}">{{ $p->stock }} {{ $p->unit }}</span>
                             </td>
                             <td>
-                                @if($p->status === 'active')
-                                    <span class="badge text-bg-success">Aktif</span>
-                                @else
-                                    <span class="badge text-bg-secondary">Non-aktif</span>
-                                @endif
+                                <span class="badge text-bg-{{ $p->status === 'active' ? 'success' : 'secondary' }}">
+                                    {{ $p->status === 'active' ? 'Aktif' : 'Non-aktif' }}
+                                </span>
                             </td>
-                            <td class="text-end">
-                                <button wire:click="edit({{ $p->id }})" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-danger"
+                            <td class="text-end text-nowrap">
+                                <button class="btn btn-sm btn-outline-secondary" wire:click="openDetail({{ $p->id }})"><i class="bi bi-eye"></i></button>
+                                <button class="btn btn-sm btn-outline-primary" wire:click="openEdit({{ $p->id }})"><i class="bi bi-pencil"></i></button>
+                                <button class="btn btn-sm btn-outline-danger"
                                         onclick="confirmDelete(() => @this.delete({{ $p->id }}))">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="text-center text-muted py-4">Belum ada produk.</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">Belum ada produk.</td></tr>
                     @endforelse
                     </tbody>
                 </table>
             </div>
-
             <div class="mt-2">{{ $products->links() }}</div>
         </div>
     </div>
 
-    {{-- Modal form --}}
-    @if ($showModal)
-        <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,.45)">
-            <div class="modal-dialog modal-dialog-centered modal-lg">
-                <div class="modal-content">
-                    <form wire:submit.prevent="store">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                {{ $editMode ? 'Edit Produk' : 'Tambah Produk' }}
-                            </h5>
-                            <button type="button" class="btn-close" wire:click="closeModal"></button>
+    @if($showModal)
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.45);" wire:ignore.self>
+        <div class="modal-dialog modal-lg">
+            <form wire:submit.prevent="save" class="modal-content" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ $editingId ? 'Edit' : 'Tambah' }} Produk</h5>
+                    <button type="button" class="btn-close" wire:click="$set('showModal', false)"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nama Produk <span class="text-danger">*</span></label>
+                            <input type="text" wire:model="name" class="form-control @error('name') is-invalid @enderror">
+                            @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                         </div>
-                        <div class="modal-body">
-                            <div class="row g-3">
-                                <div class="col-md-8">
-                                    <label class="form-label">Nama Produk <span class="text-danger">*</span></label>
-                                    <input wire:model="name" type="text" class="form-control @error('name') is-invalid @enderror">
-                                    @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Status <span class="text-danger">*</span></label>
-                                    <select wire:model="status" class="form-select @error('status') is-invalid @enderror">
-                                        <option value="active">Aktif</option>
-                                        <option value="inactive">Non-aktif</option>
-                                    </select>
-                                    @error('status') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Harga (Rp) <span class="text-danger">*</span></label>
-                                    <input wire:model="price" type="number" step="0.01" min="0" class="form-control @error('price') is-invalid @enderror">
-                                    @error('price') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Stok <span class="text-danger">*</span></label>
-                                    <input wire:model="stock" type="number" min="0" class="form-control @error('stock') is-invalid @enderror">
-                                    @error('stock') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Kategori <span class="text-danger">*</span></label>
-                                    <input wire:model="categoryForm" type="text" list="kategori-list" class="form-control @error('categoryForm') is-invalid @enderror" placeholder="Misal: Kue Kering">
-                                    <datalist id="kategori-list">
-                                        @foreach ($categories as $cat)
-                                            <option value="{{ $cat }}">
-                                        @endforeach
-                                    </datalist>
-                                    @error('categoryForm') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Foto Produk</label>
-                                    <input wire:model="image" type="file" accept="image/*" class="form-control @error('image') is-invalid @enderror">
-                                    @error('image') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                    <div class="mt-2 d-flex align-items-center gap-2">
-                                        @if ($image)
-                                            <img src="{{ $image->temporaryUrl() }}" width="64" height="64" class="rounded object-fit-cover border">
-                                            <span class="text-muted small">Preview</span>
-                                        @elseif ($existingImage)
-                                            <img src="{{ asset('storage/' . $existingImage) }}" width="64" height="64" class="rounded object-fit-cover border">
-                                            <span class="text-muted small">Foto saat ini</span>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Kode <span class="text-danger">*</span></label>
+                            <input type="text" wire:model="code" class="form-control @error('code') is-invalid @enderror">
+                            @error('code') <div class="invalid-feedback">{{ $message }}</div> @enderror
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-light" wire:click="closeModal">Batal</button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Simpan
-                            </button>
+                        <div class="col-md-3">
+                            <label class="form-label">Kategori</label>
+                            <select wire:model="category_id" class="form-select">
+                                <option value="">— Pilih —</option>
+                                @foreach($categories as $c)
+                                    <option value="{{ $c->id }}">{{ $c->name }}</option>
+                                @endforeach
+                            </select>
                         </div>
-                    </form>
+                        <div class="col-md-4">
+                            <label class="form-label">Harga Modal <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" min="0" wire:model="cost_price" class="form-control @error('cost_price') is-invalid @enderror">
+                            @error('cost_price') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Harga Jual <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" min="0" wire:model="selling_price" class="form-control @error('selling_price') is-invalid @enderror">
+                            @error('selling_price') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Satuan</label>
+                            <input type="text" wire:model="unit" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Stok Awal</label>
+                            <input type="number" min="0" wire:model="stock" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Minimum Stok</label>
+                            <input type="number" min="0" wire:model="minimum_stock" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Status</label>
+                            <select wire:model="status" class="form-select">
+                                <option value="active">Aktif</option>
+                                <option value="inactive">Non-aktif</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Deskripsi</label>
+                            <textarea wire:model="description" class="form-control" rows="2"></textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Foto Produk</label>
+                            <input type="file" wire:model="imageUpload" class="form-control" accept="image/*">
+                            @error('imageUpload') <div class="text-danger small">{{ $message }}</div> @enderror
+                            @if ($imageUpload)
+                                <img src="{{ $imageUpload->temporaryUrl() }}" class="mt-2 rounded" style="width:100px;height:100px;object-fit:cover">
+                            @elseif($existingImage)
+                                <img src="{{ asset('storage/'.$existingImage) }}" class="mt-2 rounded" style="width:100px;height:100px;object-fit:cover">
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" wire:click="$set('showModal', false)">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
+
+    @if($showDetail && $detail)
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.45);" wire:ignore.self>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Detail Produk</h5>
+                    <button type="button" class="btn-close" wire:click="$set('showDetail', false)"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        @if($detail->image)
+                            <img src="{{ asset('storage/'.$detail->image) }}" class="rounded" style="max-width:180px;max-height:180px;object-fit:cover">
+                        @endif
+                    </div>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Nama</dt><dd class="col-sm-8">{{ $detail->name }}</dd>
+                        <dt class="col-sm-4">Kode</dt><dd class="col-sm-8">{{ $detail->code }}</dd>
+                        <dt class="col-sm-4">Kategori</dt><dd class="col-sm-8">{{ $detail->category?->name ?? '—' }}</dd>
+                        <dt class="col-sm-4">Harga Modal</dt><dd class="col-sm-8">{{ F::rupiah($detail->cost_price) }}</dd>
+                        <dt class="col-sm-4">Harga Jual</dt><dd class="col-sm-8">{{ F::rupiah($detail->selling_price) }}</dd>
+                        <dt class="col-sm-4">Stok</dt><dd class="col-sm-8">{{ $detail->stock }} {{ $detail->unit }}</dd>
+                        <dt class="col-sm-4">Minimum Stok</dt><dd class="col-sm-8">{{ $detail->minimum_stock }} {{ $detail->unit }}</dd>
+                        <dt class="col-sm-4">Status</dt><dd class="col-sm-8">{{ $detail->status === 'active' ? 'Aktif' : 'Non-aktif' }}</dd>
+                        @if($detail->description)
+                            <dt class="col-sm-4">Deskripsi</dt><dd class="col-sm-8">{{ $detail->description }}</dd>
+                        @endif
+                    </dl>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" wire:click="$set('showDetail', false)">Tutup</button>
                 </div>
             </div>
         </div>
+    </div>
     @endif
 </div>
