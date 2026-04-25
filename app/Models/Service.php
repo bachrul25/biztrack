@@ -6,16 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Product extends Model
+class Service extends Model
 {
     protected $fillable = [
         'seller_id',
         'brand',
-        'gender_category',
+        'service_type',
         'name',
         'description',
         'price',
-        'stock',
         'category',
         'image',
         'status',
@@ -26,13 +25,8 @@ class Product extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
-    public function carts(): HasMany
+    public function bookings(): HasMany
     {
-        return $this->hasMany(Cart::class);
-    }
-
-    public function orderItems(): HasMany
-    {
-        return $this->hasMany(OrderItem::class);
+        return $this->hasMany(ServiceBooking::class);
     }
 }

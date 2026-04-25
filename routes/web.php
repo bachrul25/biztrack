@@ -1,48 +1,74 @@
 <?php
 
-use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\ReportPdfController;
-use App\Livewire\DashboardComponent;
-use App\Livewire\FinanceComponent;
-use App\Livewire\ProductComponent;
-use App\Livewire\Reports\FinanceReportComponent;
-use App\Livewire\Reports\ProfitLossReportComponent;
-use App\Livewire\Reports\SalesReportComponent;
-use App\Livewire\Reports\StockReportComponent;
-use App\Livewire\SaleComponent;
-use App\Livewire\StockComponent;
+use App\Livewire\LandingPageComponent;
+use App\Livewire\HomePageComponent;
+use App\Livewire\Auth\LoginComponent;
+use App\Livewire\Auth\RegisterComponent;
+use App\Livewire\Seller\SellerRegisterComponent;
+use App\Livewire\Admin\AdminDashboardComponent;
+use App\Livewire\Admin\ManageCompanyStructureComponent;
+use App\Livewire\Admin\ManageSellersComponent;
+use App\Livewire\Admin\ManageProductsComponent as AdminManageProductsComponent;
+use App\Livewire\Admin\ManageServicesComponent as AdminManageServicesComponent;
+use App\Livewire\Admin\ViewReportsComponent as AdminViewReportsComponent;
+use App\Livewire\Buyer\BuyerDashboardComponent;
+use App\Livewire\Buyer\ProductListComponent;
+use App\Livewire\Buyer\ProductDetailComponent;
+use App\Livewire\Buyer\CartComponent;
+use App\Livewire\Buyer\CheckoutComponent;
+use App\Livewire\Buyer\ServiceListComponent;
+use App\Livewire\Buyer\ServiceBookingComponent;
+use App\Livewire\Buyer\ServiceTrackingComponent;
+use App\Livewire\Seller\SellerDashboardComponent;
+use App\Livewire\Seller\SellerProfileComponent;
+use App\Livewire\Seller\ManageProductsComponent as SellerManageProductsComponent;
+use App\Livewire\Seller\ManageServicesComponent as SellerManageServicesComponent;
+use App\Livewire\Seller\ViewReportsComponent as SellerViewReportsComponent;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return redirect()->route(auth()->check() ? 'dashboard' : 'login');
+// Public routes
+Route::get('/', LandingPageComponent::class)->name('landing');
+Route::get('/home', HomePageComponent::class)->name('home');
+Route::get('/login', LoginComponent::class)->name('login');
+Route::get('/register', RegisterComponent::class)->name('register');
+Route::get('/seller/register', SellerRegisterComponent::class)->name('seller.register');
+
+// Logout
+Route::get('/logout', function () {
+    Auth::logout();
+    request()->session()->invalidate();
+    request()->session()->regenerateToken();
+    return redirect('/login');
+})->name('logout');
+
+// Admin routes
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::get('/admin/dashboard', AdminDashboardComponent::class)->name('admin.dashboard');
+    Route::get('/admin/company-structure', ManageCompanyStructureComponent::class)->name('admin.company-structure');
+    Route::get('/admin/sellers', ManageSellersComponent::class)->name('admin.sellers');
+    Route::get('/admin/products', AdminManageProductsComponent::class)->name('admin.products');
+    Route::get('/admin/services', AdminManageServicesComponent::class)->name('admin.services');
+    Route::get('/admin/reports', AdminViewReportsComponent::class)->name('admin.reports');
 });
 
-Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.store');
+// Buyer routes
+Route::middleware(['auth', 'role:buyer'])->group(function () {
+    Route::get('/buyer/dashboard', BuyerDashboardComponent::class)->name('buyer.dashboard');
+    Route::get('/buyer/products', ProductListComponent::class)->name('buyer.products');
+    Route::get('/buyer/products/{id}', ProductDetailComponent::class)->name('buyer.products.detail');
+    Route::get('/buyer/cart', CartComponent::class)->name('buyer.cart');
+    Route::get('/buyer/checkout', CheckoutComponent::class)->name('buyer.checkout');
+    Route::get('/buyer/services', ServiceListComponent::class)->name('buyer.services');
+    Route::get('/buyer/services/{id}/booking', ServiceBookingComponent::class)->name('buyer.services.booking');
+    Route::get('/buyer/service-tracking/{id}', ServiceTrackingComponent::class)->name('buyer.service-tracking');
 });
 
-Route::middleware('auth')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-
-    Route::get('/dashboard', DashboardComponent::class)->name('dashboard');
-
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/products', ProductComponent::class)->name('products');
-        Route::get('/sales', SaleComponent::class)->name('sales');
-        Route::get('/stocks', StockComponent::class)->name('stocks');
-        Route::get('/finances', FinanceComponent::class)->name('finances');
-    });
-
-    Route::middleware('role:admin,owner')->group(function () {
-        Route::get('/reports/sales', SalesReportComponent::class)->name('reports.sales');
-        Route::get('/reports/finance', FinanceReportComponent::class)->name('reports.finance');
-        Route::get('/reports/profit-loss', ProfitLossReportComponent::class)->name('reports.profit-loss');
-        Route::get('/reports/stocks', StockReportComponent::class)->name('reports.stocks');
-
-        Route::get('/reports/sales/pdf', [ReportPdfController::class, 'sales'])->name('reports.sales.pdf');
-        Route::get('/reports/finance/pdf', [ReportPdfController::class, 'finance'])->name('reports.finance.pdf');
-        Route::get('/reports/profit-loss/pdf', [ReportPdfController::class, 'profitLoss'])->name('reports.profit-loss.pdf');
-        Route::get('/reports/stocks/pdf', [ReportPdfController::class, 'stock'])->name('reports.stocks.pdf');
-    });
+// Seller routes
+Route::middleware(['auth', 'role:seller'])->group(function () {
+    Route::get('/seller/dashboard', SellerDashboardComponent::class)->name('seller.dashboard');
+    Route::get('/seller/profile', SellerProfileComponent::class)->name('seller.profile');
+    Route::get('/seller/products', SellerManageProductsComponent::class)->name('seller.products');
+    Route::get('/seller/services', SellerManageServicesComponent::class)->name('seller.services');
+    Route::get('/seller/reports', SellerViewReportsComponent::class)->name('seller.reports');
 });

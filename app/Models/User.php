@@ -2,15 +2,14 @@
 
 namespace App\Models;
 
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     protected $fillable = [
@@ -18,24 +17,49 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'phone',
+        'address',
     ];
 
     protected $hidden = [
         'password',
-        'remember_token',
     ];
 
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
 
-    public function sales(): HasMany
+    public function sellerProfile(): HasOne
     {
-        return $this->hasMany(Sale::class);
+        return $this->hasOne(SellerProfile::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'seller_id');
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class, 'seller_id');
+    }
+
+    public function carts(): HasMany
+    {
+        return $this->hasMany(Cart::class, 'buyer_id');
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'buyer_id');
+    }
+
+    public function serviceBookings(): HasMany
+    {
+        return $this->hasMany(ServiceBooking::class, 'buyer_id');
     }
 
     public function isAdmin(): bool
@@ -43,8 +67,13 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
-    public function isOwner(): bool
+    public function isBuyer(): bool
     {
-        return $this->role === 'owner';
+        return $this->role === 'buyer';
+    }
+
+    public function isSeller(): bool
+    {
+        return $this->role === 'seller';
     }
 }
