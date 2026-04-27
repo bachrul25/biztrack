@@ -28,6 +28,7 @@ class AuthController extends Controller
         }
 
         $request->session()->regenerate();
+
         return redirect()->intended(route('dashboard'));
     }
 
@@ -36,6 +37,7 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect()->route('login');
     }
 }

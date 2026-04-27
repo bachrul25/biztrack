@@ -8,19 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('sale_details', function (Blueprint $table) {
+        Schema::create('stock_movements', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('sale_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->enum('type', ['in', 'out']);
             $table->integer('quantity');
-            $table->decimal('price', 12, 2);
-            $table->decimal('subtotal', 14, 2);
+            $table->string('description')->nullable();
+            $table->date('movement_date');
             $table->timestamps();
+
+            $table->index(['product_id', 'movement_date']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('sale_details');
+        Schema::dropIfExists('stock_movements');
     }
 };

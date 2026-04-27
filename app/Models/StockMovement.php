@@ -6,28 +6,22 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class SaleDetail extends Model
+class StockMovement extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'sale_id',
         'product_id',
+        'type',
         'quantity',
-        'price',
-        'subtotal',
+        'description',
+        'movement_date',
     ];
 
     protected $casts = [
+        'movement_date' => 'date',
         'quantity' => 'integer',
-        'price' => 'decimal:2',
-        'subtotal' => 'decimal:2',
     ];
-
-    public function sale(): BelongsTo
-    {
-        return $this->belongsTo(Sale::class);
-    }
 
     public function product(): BelongsTo
     {

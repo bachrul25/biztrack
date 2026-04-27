@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,15 +13,24 @@ class Sale extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
         'invoice_number',
-        'total',
-        'date',
+        'user_id',
+        'sale_date',
+        'total_amount',
+        'total_cost',
+        'gross_profit',
+        'payment_method',
+        'paid_amount',
+        'change_amount',
     ];
 
     protected $casts = [
-        'date' => 'date',
-        'total' => 'decimal:2',
+        'sale_date' => 'date',
+        'total_amount' => 'decimal:2',
+        'total_cost' => 'decimal:2',
+        'gross_profit' => 'decimal:2',
+        'paid_amount' => 'decimal:2',
+        'change_amount' => 'decimal:2',
     ];
 
     public function user(): BelongsTo
@@ -28,15 +38,16 @@ class Sale extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function details(): HasMany
+    public function items(): HasMany
     {
-        return $this->hasMany(SaleDetail::class);
+        return $this->hasMany(SaleItem::class);
     }
 
-    public static function generateInvoiceNumber(): string
+    public static function generateInvoiceNumber(?\DateTimeInterface $date = null): string
     {
-        $prefix = 'INV-' . now()->format('Ymd');
-        $last = static::where('invoice_number', 'like', $prefix . '%')
+        $date = $date ? Carbon::instance($date) : now();
+        $prefix = 'INV-'.$date->format('Ymd');
+        $last = static::where('invoice_number', 'like', $prefix.'%')
             ->orderByDesc('id')
             ->first();
 
@@ -46,6 +57,6 @@ class Sale extends Model
             $next = (int) end($parts) + 1;
         }
 
-        return $prefix . '-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        return $prefix.'-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
 }

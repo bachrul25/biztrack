@@ -4,63 +4,44 @@ namespace App\Livewire;
 
 use App\Models\Product;
 use App\Models\Sale;
+use App\Repositories\ProductRepository;
 use App\Repositories\SaleRepository;
-use Illuminate\Contracts\View\View;
+use App\Services\SaleService;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Title;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
-use RuntimeException;
 
 #[Layout('layouts.app')]
-#[Title('Penjualan')]
 class SaleComponent extends Component
 {
     use WithPagination;
 
-    #[Url(as: 'q')]
+    public string $mode = 'list'; // list | create | detail
+
+    public ?int $detailId = null;
+
+    // filters
     public string $search = '';
 
-    #[Url(as: 'dari')]
-    public string $dateFrom = '';
+    public ?string $dateFrom = null;
 
-    #[Url(as: 'sampai')]
-    public string $dateTo = '';
+    public ?string $dateTo = null;
 
-    public bool $showModal = false;
+    // POS state
+    public array $cart = [];
 
-    /** @var array<int, array{product_id: ?int, quantity: int}> */
-    public array $items = [];
+    public string $productSearch = '';
 
-    public string $saleDate = '';
+    public string $paymentMethod = 'cash';
 
-    public ?int $viewSaleId = null;
-    public bool $showView = false;
+    public float $paidAmount = 0;
+
+    public ?string $saleDate = null;
 
     public function mount(): void
     {
         $this->saleDate = now()->toDateString();
-        $this->addItem();
     }
-
-    protected function rules(): array
-    {
-        return [
-            'items.*.product_id' => ['required', 'exists:products,id'],
-            'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'saleDate' => ['required', 'date'],
-        ];
-    }
-
-    protected array $messages = [
-        'items.*.product_id.required' => 'Produk wajib dipilih.',
-        'items.*.product_id.exists' => 'Produk tidak valid.',
-        'items.*.quantity.required' => 'Jumlah wajib diisi.',
-        'items.*.quantity.integer' => 'Jumlah harus berupa angka.',
-        'items.*.quantity.min' => 'Jumlah minimal 1.',
-        'saleDate.required' => 'Tanggal wajib diisi.',
-    ];
 
     public function updatingSearch(): void
     {
@@ -77,93 +58,166 @@ class SaleComponent extends Component
         $this->resetPage();
     }
 
-    public function openCreate(): void
+    public function startCreate(): void
     {
-        $this->items = [];
-        $this->addItem();
+        $this->cart = [];
+        $this->productSearch = '';
+        $this->paymentMethod = 'cash';
+        $this->paidAmount = 0;
         $this->saleDate = now()->toDateString();
-        $this->resetErrorBag();
-        $this->showModal = true;
+        $this->mode = 'create';
     }
 
-    public function addItem(): void
+    public function openDetail(int $id): void
     {
-        $this->items[] = ['product_id' => null, 'quantity' => 1];
+        $this->detailId = $id;
+        $this->mode = 'detail';
     }
 
-    public function removeItem(int $index): void
+    public function backToList(): void
     {
-        if (count($this->items) > 1) {
-            unset($this->items[$index]);
-            $this->items = array_values($this->items);
-        }
+        $this->mode = 'list';
+        $this->detailId = null;
     }
 
-    public function getSubtotal(int $index): float
+    public function addToCart(int $productId): void
     {
-        $row = $this->items[$index] ?? null;
-        if (! $row || ! $row['product_id']) {
-            return 0.0;
+        $p = Product::find($productId);
+        if (! $p || $p->status !== 'active') {
+            return;
         }
-        $product = Product::find($row['product_id']);
-        if (! $product) {
-            return 0.0;
+        foreach ($this->cart as $i => $row) {
+            if ($row['product_id'] === $productId) {
+                if ($this->cart[$i]['quantity'] + 1 > $p->stock) {
+                    $this->dispatch('swal', icon: 'warning', title: 'Stok tidak cukup', text: "Stok {$p->name} hanya {$p->stock}.");
+
+                    return;
+                }
+                $this->cart[$i]['quantity']++;
+                $this->cart[$i]['subtotal'] = $this->cart[$i]['price'] * $this->cart[$i]['quantity'];
+
+                return;
+            }
         }
-        return (float) $product->price * (int) $row['quantity'];
+        if ($p->stock <= 0) {
+            $this->dispatch('swal', icon: 'warning', title: 'Stok habis', text: "Produk {$p->name} stoknya habis.");
+
+            return;
+        }
+        $this->cart[] = [
+            'product_id' => $p->id,
+            'name' => $p->name,
+            'price' => (float) $p->selling_price,
+            'cost_price' => (float) $p->cost_price,
+            'quantity' => 1,
+            'subtotal' => (float) $p->selling_price,
+            'stock' => (int) $p->stock,
+            'unit' => $p->unit,
+        ];
+    }
+
+    public function incrementQty(int $index): void
+    {
+        if (! isset($this->cart[$index])) {
+            return;
+        }
+        $row = $this->cart[$index];
+        if ($row['stock'] < $row['quantity'] + 1) {
+            $this->dispatch('swal', icon: 'warning', title: 'Stok tidak cukup');
+
+            return;
+        }
+        $this->cart[$index]['quantity']++;
+        $this->cart[$index]['subtotal'] = $this->cart[$index]['price'] * $this->cart[$index]['quantity'];
+    }
+
+    public function decrementQty(int $index): void
+    {
+        if (! isset($this->cart[$index])) {
+            return;
+        }
+        if ($this->cart[$index]['quantity'] <= 1) {
+            $this->removeFromCart($index);
+
+            return;
+        }
+        $this->cart[$index]['quantity']--;
+        $this->cart[$index]['subtotal'] = $this->cart[$index]['price'] * $this->cart[$index]['quantity'];
+    }
+
+    public function removeFromCart(int $index): void
+    {
+        array_splice($this->cart, $index, 1);
     }
 
     public function getTotalProperty(): float
     {
-        $total = 0;
-        foreach (array_keys($this->items) as $i) {
-            $total += $this->getSubtotal($i);
-        }
-        return $total;
+        return array_sum(array_map(fn ($r) => (float) $r['subtotal'], $this->cart));
     }
 
-    public function store(SaleRepository $sales): void
+    public function getChangeProperty(): float
     {
-        $this->validate();
+        return max(0, (float) $this->paidAmount - $this->total);
+    }
 
+    public function checkout(): void
+    {
+        if (empty($this->cart)) {
+            $this->dispatch('swal', icon: 'warning', title: 'Keranjang kosong');
+
+            return;
+        }
+        $this->validate([
+            'paymentMethod' => ['required', 'in:cash,transfer,qris'],
+            'paidAmount' => ['required', 'numeric', 'min:0'],
+            'saleDate' => ['required', 'date'],
+        ]);
         try {
-            $payload = array_map(fn ($i) => [
-                'product_id' => (int) $i['product_id'],
-                'quantity' => (int) $i['quantity'],
-            ], $this->items);
-
-            $sales->createSale($payload, $this->saleDate);
-            $this->dispatch('swal', icon: 'success', title: 'Transaksi berhasil disimpan');
-            $this->showModal = false;
-            $this->items = [];
-            $this->addItem();
-        } catch (RuntimeException $e) {
-            $this->dispatch('swal', icon: 'error', title: $e->getMessage());
+            $sale = app(SaleService::class)->process(
+                array_map(fn ($r) => ['product_id' => $r['product_id'], 'quantity' => (int) $r['quantity']], $this->cart),
+                [
+                    'payment_method' => $this->paymentMethod,
+                    'paid_amount' => $this->paymentMethod === 'cash' ? $this->paidAmount : $this->total,
+                    'sale_date' => $this->saleDate,
+                    'user_id' => auth()->id(),
+                ]
+            );
+            $this->dispatch('swal', icon: 'success', title: 'Transaksi berhasil', text: 'Invoice '.$sale->invoice_number);
+            $this->detailId = $sale->id;
+            $this->cart = [];
+            $this->mode = 'detail';
+        } catch (\DomainException $e) {
+            $this->dispatch('swal', icon: 'error', title: 'Gagal', text: $e->getMessage());
         }
     }
 
-    public function view(int $id): void
+    public function delete(int $id): void
     {
-        $this->viewSaleId = $id;
-        $this->showView = true;
+        try {
+            $sale = Sale::findOrFail($id);
+            app(SaleService::class)->delete($sale);
+            $this->dispatch('swal', icon: 'success', title: 'Transaksi dihapus');
+        } catch (\Throwable $e) {
+            $this->dispatch('swal', icon: 'error', title: 'Gagal', text: $e->getMessage());
+        }
     }
 
-    public function delete(int $id, SaleRepository $sales): void
+    public function render()
     {
-        $sale = Sale::findOrFail($id);
-        $sales->deleteSale($sale);
-        $this->dispatch('swal', icon: 'success', title: 'Transaksi dihapus');
-    }
-
-    public function render(SaleRepository $sales): View
-    {
-        $viewSale = $this->viewSaleId
-            ? Sale::with(['details.product', 'user'])->find($this->viewSaleId)
-            : null;
+        $saleRepo = app(SaleRepository::class);
+        $productRepo = app(ProductRepository::class);
+        $sales = $saleRepo->paginate($this->search ?: null, $this->dateFrom, $this->dateTo, 10);
+        $products = $this->mode === 'create'
+            ? ($this->productSearch !== ''
+                ? $productRepo->searchActive($this->productSearch)
+                : $productRepo->allActive())
+            : collect();
+        $detail = $this->mode === 'detail' && $this->detailId ? $saleRepo->find($this->detailId) : null;
 
         return view('livewire.sale-component', [
-            'sales' => $sales->paginate($this->search, $this->dateFrom ?: null, $this->dateTo ?: null, 10),
-            'products' => Product::where('status', 'active')->orderBy('name')->get(),
-            'viewSale' => $viewSale,
+            'sales' => $sales,
+            'products' => $products,
+            'detail' => $detail,
         ]);
     }
 }

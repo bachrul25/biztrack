@@ -4,7 +4,8 @@
 @endphp
 <aside class="app-sidebar">
     <div class="brand">
-        <i class="bi bi-graph-up-arrow"></i> BizTrack
+        <i class="bi bi-shop-window"></i> BizTrack
+        <small>Toko Kue Bu Nina</small>
     </div>
 
     <div class="nav-section">Menu Utama</div>
@@ -23,15 +24,21 @@
                 </a>
             </li>
             <li>
-                <a href="{{ route('sales') }}"
-                   class="nav-link {{ request()->routeIs('sales') ? 'active' : '' }}">
-                    <i class="bi bi-cart-check"></i> Penjualan
+                <a href="{{ route('categories') }}"
+                   class="nav-link {{ request()->routeIs('categories') ? 'active' : '' }}">
+                    <i class="bi bi-tags"></i> Kategori
                 </a>
             </li>
             <li>
                 <a href="{{ route('stocks') }}"
                    class="nav-link {{ request()->routeIs('stocks') ? 'active' : '' }}">
                     <i class="bi bi-box-arrow-in-down"></i> Stok
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('sales') }}"
+                   class="nav-link {{ request()->routeIs('sales') ? 'active' : '' }}">
+                    <i class="bi bi-cart-check"></i> Transaksi Penjualan
                 </a>
             </li>
             <li>
@@ -52,6 +59,12 @@
             </a>
         </li>
         <li>
+            <a href="{{ route('reports.stocks') }}"
+               class="nav-link {{ request()->routeIs('reports.stocks') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-data"></i> Laporan Stok
+            </a>
+        </li>
+        <li>
             <a href="{{ route('reports.finance') }}"
                class="nav-link {{ request()->routeIs('reports.finance') ? 'active' : '' }}">
                 <i class="bi bi-cash-stack"></i> Laporan Keuangan
@@ -60,13 +73,17 @@
         <li>
             <a href="{{ route('reports.profit-loss') }}"
                class="nav-link {{ request()->routeIs('reports.profit-loss') ? 'active' : '' }}">
-                <i class="bi bi-graph-up"></i> Laba Rugi
+                <i class="bi bi-graph-up"></i> Laporan Laba Rugi
             </a>
         </li>
+    </ul>
+
+    <div class="nav-section">Analisis</div>
+    <ul class="nav flex-column">
         <li>
-            <a href="{{ route('reports.stocks') }}"
-               class="nav-link {{ request()->routeIs('reports.stocks') ? 'active' : '' }}">
-                <i class="bi bi-clipboard-data"></i> Laporan Stok
+            <a href="{{ route('predictions.sales') }}"
+               class="nav-link {{ request()->routeIs('predictions.sales') ? 'active' : '' }}">
+                <i class="bi bi-graph-up-arrow"></i> Prediksi Penjualan
             </a>
         </li>
     </ul>
