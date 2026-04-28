@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Livewire\BmcComponent;
 use App\Livewire\CategoryComponent;
 use App\Livewire\DashboardComponent;
 use App\Livewire\FinanceComponent;
@@ -46,6 +47,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/finance', FinanceReportComponent::class)->name('reports.finance');
         Route::get('/reports/profit-loss', ProfitLossReportComponent::class)->name('reports.profit-loss');
         Route::get('/predictions/sales', SalesPredictionComponent::class)->name('predictions.sales');
+        Route::get('/bmc', BmcComponent::class)->name('bmc');
 
         // Invoice PDF (simple sale detail print)
         Route::get('/sales/{sale}/invoice', function (Sale $sale) {
