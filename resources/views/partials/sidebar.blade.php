@@ -86,6 +86,12 @@
                 <i class="bi bi-graph-up-arrow"></i> Prediksi Penjualan
             </a>
         </li>
+        <li>
+            <a href="{{ route('bmc') }}"
+               class="nav-link {{ request()->routeIs('bmc') ? 'active' : '' }}">
+                <i class="bi bi-grid-3x3-gap"></i> Business Model Canvas
+            </a>
+        </li>
     </ul>
 
     <div class="nav-section">Akun</div>
